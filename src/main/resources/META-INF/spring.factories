@@ -1,0 +1,9 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+com.middleware.alert.autoconfigure.AlertAutoConfiguration,\
+com.middleware.alert.autoconfigure.AlertPersistenceAutoConfiguration,\
+com.middleware.alert.autoconfigure.AlertWebAutoConfiguration,\
+com.middleware.alert.autoconfigure.AlertSlowSqlAutoConfiguration,\
+com.middleware.alert.autoconfigure.AlertAsyncAutoConfiguration,\
+com.middleware.alert.autoconfigure.AlertMemoryAutoConfiguration,\
+com.middleware.alert.autoconfigure.AlertHttpOutboundAutoConfiguration,\
+com.middleware.alert.autoconfigure.AlertLocalEndpointAutoConfiguration
