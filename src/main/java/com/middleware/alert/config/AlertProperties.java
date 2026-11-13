@@ -144,7 +144,8 @@ public class AlertProperties {
         private String url;
         private String username;
         private String password;
-        private String driverClassName = "com.kingbase8.Driver";
+        /** 驱动类名；留空时按 JDBC URL 推断（jdbc:kingbase8: / jdbc:mysql: / jdbc:postgresql:） */
+        private String driverClassName;
         private final Hikari hikari = new Hikari();
         /** 启动时做一次只读自检，失败仅告警 */
         private boolean selfCheck = true;

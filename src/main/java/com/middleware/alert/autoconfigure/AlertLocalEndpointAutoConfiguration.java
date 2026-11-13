@@ -27,7 +27,7 @@ import org.springframework.web.servlet.DispatcherServlet;
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnClass({DispatcherServlet.class, RestController.class})
-@ConditionalOnProperty(prefix = "alert", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "alert", name = "enabled", havingValue = "true", matchIfMissing = false)
 @AutoConfigureAfter({AlertAutoConfiguration.class, AlertPersistenceAutoConfiguration.class})
 public class AlertLocalEndpointAutoConfiguration {
 

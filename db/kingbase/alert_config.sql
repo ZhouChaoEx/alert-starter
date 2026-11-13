@@ -1,7 +1,7 @@
 -- =============================================================================
 -- alert-starter 共享库配置表 DDL
 -- 数据库 : KingbaseES（KINGBASE_ES 兼容模式，PostgreSQL 语法）
--- 执行方式: 与 db/alert_info.sql 在同一个项目组共享库执行
+-- 执行方式: 与 db/kingbase/alert_info.sql 在同一个项目组共享库执行
 --           存量应用（只有 18 条配置）见文件末尾「存量应用补插」段，替换 <APP_NAME> 后执行
 -- 版本   : v0.3（数据源合并）
 --
@@ -180,6 +180,23 @@ VALUES ('xk-report', 'console.instances', '', 'LIST', 'CONSOLE',
 -- GRANT SELECT, INSERT, UPDATE ON alert_config TO <管理服务账号>;
 -- GRANT USAGE, SELECT ON SEQUENCE alert_config_id_seq TO <管理服务账号>;
 
+-- 若需创建用户
+-- 1. 创建用户（密码替换为实际值；若用户已存在，跳过本句）
+-- CREATE USER alertuser WITH PASSWORD '<密码>';
+
+-- 2. 允许连接告警库（库名按实际替换，例如 pv）
+-- GRANT CONNECT ON DATABASE pv TO alertuser;
+
+-- 3. 允许访问 xk-report schema
+-- GRANT USAGE ON SCHEMA "xk-report" TO alertuser;
+
+-- 4. 表权限：查询 + 写入 + 更新（不建议授予 DELETE）
+-- GRANT SELECT, INSERT, UPDATE ON "xk-report".alert_config TO alertuser;
+-- GRANT SELECT, INSERT, UPDATE ON "xk-report".alert_info   TO alertuser;
+
+-- 5. 序列权限（bigserial 默认生成的两个序列）
+-- GRANT USAGE, SELECT ON SEQUENCE "xk-report".alert_info_id_seq   TO alertuser;
+-- GRANT USAGE, SELECT ON SEQUENCE "xk-report".alert_config_id_seq TO alertuser;
 -- =============================================================================
 -- 回滚
 -- =============================================================================

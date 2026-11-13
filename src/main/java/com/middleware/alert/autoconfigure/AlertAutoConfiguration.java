@@ -25,7 +25,7 @@ import org.springframework.core.env.Environment;
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({AlertProperties.class, AlertConfigProperties.class})
-@ConditionalOnProperty(prefix = "alert", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "alert", name = "enabled", havingValue = "true", matchIfMissing = false)
 public class AlertAutoConfiguration {
 
     @Bean
@@ -36,7 +36,7 @@ public class AlertAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public FingerprintGenerator fingerprintGenerator(AlertContext context) {
+    public FingerprintGenerator alertFingerprintGenerator(AlertContext context) {
         return new FingerprintGenerator(context);
     }
 
@@ -48,13 +48,13 @@ public class AlertAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public DedupRegistry dedupRegistry(AlertConfigProvider configProvider) {
+    public DedupRegistry alertDedupRegistry(AlertConfigProvider configProvider) {
         return new DedupRegistry(configProvider);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public RateLimiter rateLimiter(AlertConfigProvider configProvider) {
+    public RateLimiter alertRateLimiter(AlertConfigProvider configProvider) {
         return new RateLimiter(configProvider);
     }
 

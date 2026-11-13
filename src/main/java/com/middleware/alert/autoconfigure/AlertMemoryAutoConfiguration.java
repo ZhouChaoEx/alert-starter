@@ -19,7 +19,7 @@ import org.springframework.context.annotation.Configuration;
  * <p>采样只读 JDK 的 {@code java.lang.management}，不引入任何额外依赖。</p>
  */
 @Configuration(proxyBeanMethods = false)
-@ConditionalOnProperty(prefix = "alert", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "alert", name = "enabled", havingValue = "true", matchIfMissing = false)
 @AutoConfigureAfter(AlertAutoConfiguration.class)
 public class AlertMemoryAutoConfiguration {
 

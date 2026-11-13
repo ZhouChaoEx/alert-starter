@@ -32,7 +32,7 @@ class AlertNewCollectorAutoConfigurationTest {
                     AlertAsyncAutoConfiguration.class,
                     AlertMemoryAutoConfiguration.class,
                     AlertHttpOutboundAutoConfiguration.class))
-            .withPropertyValues("spring.application.name=test-app");
+            .withPropertyValues("spring.application.name=test-app", "alert.enabled=true");
 
     @Test
     void registersSlowSqlAndAsyncCollectors() {

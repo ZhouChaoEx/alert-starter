@@ -19,7 +19,7 @@ class AlertAutoConfigurationTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(AlertAutoConfiguration.class))
-            .withPropertyValues("spring.application.name=test-app");
+            .withPropertyValues("spring.application.name=test-app", "alert.enabled=true");
 
     @Test
     void registersCoreBeans() {
@@ -40,13 +40,20 @@ class AlertAutoConfigurationTest {
     }
 
     @Test
-    void writerIsNotCreatedWithoutDatasourceUrl() {
+    void writerIsCreatedWithDatasourceUrl() {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         AlertAutoConfiguration.class,
                         AlertPersistenceAutoConfiguration.class))
-                .withPropertyValues("spring.application.name=test-app")
-                .run(context -> assertThat(context).doesNotHaveBean(AlertWriter.class));
+                .withPropertyValues(
+                        "spring.application.name=test-app",
+                        "alert.enabled=true",
+                        "alert.datasource.url=jdbc:h2:mem:coreurl;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
+                        "alert.datasource.driver-class-name=org.h2.Driver",
+                        "alert.datasource.username=sa",
+                        "alert.datasource.password=",
+                        "alert.datasource.self-check=false")
+                .run(context -> assertThat(context).hasSingleBean(AlertWriter.class));
     }
 
     @Test
@@ -55,7 +62,7 @@ class AlertAutoConfigurationTest {
                 .withConfiguration(AutoConfigurations.of(
                         AlertAutoConfiguration.class,
                         AlertWebAutoConfiguration.class))
-                .withPropertyValues("spring.application.name=test-app")
+                .withPropertyValues("spring.application.name=test-app", "alert.enabled=true")
                 .run(context -> {
                     assertThat(context).hasSingleBean(BizExceptionAspect.class);
                     assertThat(context).hasBean("alertSlowRequestFilter");
@@ -70,6 +77,7 @@ class AlertAutoConfigurationTest {
                         AlertWebAutoConfiguration.class))
                 .withPropertyValues(
                         "spring.application.name=test-app",
+                        "alert.enabled=true",
                         "alert.biz.enabled=false",
                         "alert.slow-request.enabled=false")
                 .run(context -> {

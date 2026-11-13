@@ -2,7 +2,7 @@
 
 面向**其他项目组**的操作手册：按本文顺序执行即可完成接入。每一步都给了可复制的配置、脚本和验收标准。
 
-- 适用环境：Spring Boot **2.3.x**、Java **8**、Servlet Web 应用、KingbaseES（PostgreSQL 兼容模式）。
+- 适用环境：Spring Boot **2.3.x**、Java **8**、Servlet Web 应用、告警库为 KingbaseES（PostgreSQL 兼容模式）或 MySQL（5.7 / 8.0）。
 - 一个项目组共用一套库/schema/账号，`alert_info` 与 `alert_config` 同库，用 `app_name` 区分 8 个微服务。
 - 只想采集告警就只做第 1~7 步；需要内嵌管理页面再加第 8 步。
 - 细节参考：[`INTEGRATION.md`](./INTEGRATION.md)（行为边界、验证清单）、[`ALERT_CONSOLE_DESIGN.md`](./ALERT_CONSOLE_DESIGN.md)（设计）。
@@ -32,7 +32,7 @@
 | 2 | 业务侧有 Spring Boot BOM（parent 或 `spring-boot-dependencies`） | starter 的传递依赖不带版本，缺 BOM 会报 `dependencies.dependency.version is missing` |
 | 3 | Java 8+（Boot 2.x 下 8/11/17 均可） | Boot 3 需要 17+，但本项目已不兼容 Boot 3 |
 | 4 | 应用是 Servlet Web 应用 | 没有 Web 容器时页面、慢请求采集、`/alert/**` 端点都不生效 |
-| 5 | 已有 Kingbase 驱动依赖（`kingbase8`） | 报 `ClassNotFoundException: com.kingbase8.Driver` |
+| 5 | 按告警库二选一声明 JDBC 驱动（Kingbase / MySQL），starter 以 optional 声明、不传递 | 缺驱动或驱动类名配错：启动失败（启用告警必须能加载驱动） |
 | 6 | `spring.application.name` 已配置 | `app_name` 会变成 `unknown`，页面按应用名对不上 |
 | 7 | 两个 starter 已在私服/本地仓库 | 依赖解析失败，需先由维护方 `mvn deploy` |
 
@@ -74,9 +74,10 @@ starter **传递**的依赖：`spring-boot-starter-aop`（异常切面必需）�
 | --- | --- | --- |
 | `spring-boot-starter-web` | 慢请求 Filter、Controller 切面、管理页面 | 慢请求与管理页面不生效 |
 | `spring-boot-starter-jdbc` / `spring-jdbc` | `JdbcTemplate`（一般经 MyBatis 传递） | 不创建写入器与数据源 |
-| `kingbase8` 驱动 | 连接告警库 | 启动报驱动类找不到 |
+| `kingbase8` / `mysql-connector-java` | 连接告警库 | **二选一声明**（starter 以 optional 声明、不传递）：Kingbase 用 `cn.com.kingbase:kingbase8:9.0.0`，MySQL 用 `mysql:mysql-connector-java:8.0.22`；缺失时启动失败 |
 
-> `alert-starter` 刻意不传递驱动，避免与业务方版本冲突。
+> 驱动不随 starter 传递：业务方按告警库二选一声明。`driver-class-name` 可留空，按 URL 推断
+> （`jdbc:kingbase8:` → `com.kingbase8.Driver`，`jdbc:mysql:` → `com.mysql.cj.jdbc.Driver`）。
 
 要求 `spring.aop.auto` 保持默认 `true`，否则 `@Aspect` 不生效（慢请求仍可用）。
 
@@ -88,8 +89,8 @@ starter **传递**的依赖：`spring-boot-starter-aop`（异常切面必需）�
 
 | 脚本 | 作用 |
 | --- | --- |
-| [`db/alert_info.sql`](../db/alert_info.sql) | 告警表 + 6 个索引 |
-| [`db/alert_config.sql`](../db/alert_config.sql) | 集中配置表 + 35 条初始化配置 |
+| [`db/kingbase/alert_info.sql`](../db/kingbase/alert_info.sql) / [`db/mysql/alert_info.sql`](../db/mysql/alert_info.sql) | 告警表 + 6 个索引（按告警库选择） |
+| [`db/kingbase/alert_config.sql`](../db/kingbase/alert_config.sql) / [`db/mysql/alert_config.sql`](../db/mysql/alert_config.sql) | 集中配置表 + 35 条初始化配置 |
 
 ```sql
 -- 建议先切到本项目的 schema，表名固定不带 schema 前缀
@@ -160,7 +161,7 @@ CREATE INDEX idx_alert_config_app ON alert_config (app_name);
 
 ### 2.2 初始化配置（INSERT）
 
-`db/alert_config.sql` 里是 `app_name = 'xk-report'` 的示例。**把 `<APP_NAME>` 替换成自己的应用名**（必须与 `spring.application.name` 完全一致）后执行：
+`db/{kingbase,mysql}/alert_config.sql` 里是 `app_name = 'xk-report'` 的示例。**把 `<APP_NAME>` 替换成自己的应用名**（必须与 `spring.application.name` 完全一致）后执行：
 
 ```sql
 INSERT INTO alert_config (app_name, config_key, config_value, value_type, config_group, description) VALUES
@@ -258,15 +259,19 @@ spring.application.name=<APP_NAME>
 # 可选：environment 标识，缺省取 spring.profiles.active
 #alert.env=prod
 
-# ---------- 必配置项：告警总开关（默认已启用）----------
-# 不配置 = 关闭；配 false 会整体关闭采集（需重启）
+# ---------- 必配置项：告警总开关（默认关闭，必须显式开启）----------
+# 不配置 = 关闭：引入 jar 后不写这一行，整套采集都不会装配
 alert.enabled=true
 
 # ---------- 必配置项：告警库（必填，否则不会创建写入器与管理页面）----------
+# Kingbase
 alert.datasource.url=jdbc:kingbase8://<host>:<port>/<db>?currentSchema=<schema>
+# MySQL
+# alert.datasource.url=jdbc:mysql://<host>:3306/<db>?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
 alert.datasource.username=<账号>
 alert.datasource.password=<密码>
-alert.datasource.driver-class-name=com.kingbase8.Driver
+# 可留空，按 URL 推断：com.kingbase8.Driver / com.mysql.cj.jdbc.Driver
+# alert.datasource.driver-class-name=
 alert.datasource.hikari.maximum-pool-size=2
 alert.datasource.hikari.minimum-idle=1
 alert.datasource.hikari.connection-timeout-ms=3000
@@ -326,7 +331,7 @@ alert.batch.interval-ms=1000
 | --- | --- | --- | --- |
 | `alert.datasource.url` | 无 | **必须有值** | 没有它不装配数据源、`alertJdbcTemplate`、写入器，管理页面也不会装配 |
 | `alert.console.enabled` | `false` | **必须显式 `true`** | 否则 `/alert-console/**` 全部 404 |
-| `alert.enabled` | 不配即开启 | 保持 `true` 或不配 | 配 `false` 关闭整套采集自动装配 |
+| `alert.enabled` | `false` | **必须显式 `true`** | 不配置则整套采集不装配：连告警数据源、写入器、`/alert/**` 端点都不会创建；**升级已有服务时必须补这一行**，否则采集会停止 |
 | `alert.config.enabled` | `true` | 保持 `true` | 为 `false` 时不读 `alert_config`，页面改了也不生效 |
 | `alert.biz.enabled` | `true` | 保持 `true` | `AlertableException` 上报开关 |
 | `alert.slow-request.enabled` | `true` | 保持 `true` | 慢请求采集开关 |
@@ -338,6 +343,21 @@ alert.batch.interval-ms=1000
 | `alert.http.outbound.enabled` | `false` | **需显式 `true`** | 出站 HTTP 采集开关；覆盖容器管理的 RestTemplate 与 @FeignClient 接口 |
 
 > 配置优先级：`alert_config` 表（启动时加载一次）> `application.properties` / Apollo > 代码默认值。
+
+### 3.2 没有业务数据库的应用（转发 / 网关类）
+
+这类应用**可以接入告警**，但启用告警后必须把告警库配置齐全，否则**启动失败**：
+
+- 告警库是**独立数据源**（`alert.datasource.*`），只连告警库，不碰业务 `DataSource`；
+- 慢 SQL 采集只对容器里的 `SqlSessionFactory` 生效：
+  - 类路径没有 MyBatis → `@ConditionalOnClass` 不满足，整个慢 SQL 装配跳过；
+  - 引了 MyBatis 但没配业务数据源 → 没有 `SqlSessionFactory` Bean，不会注册任何拦截器；
+- 启用告警（`alert.enabled=true`）时，`AlertDatasourceValidationAutoConfiguration` 会强制校验：
+  `alert.datasource.url` 必填、类路径必须有 `JdbcTemplate`/Hikari/驱动类，缺一个就启动失败；
+- 驱动随 starter 传递，通常无需自己声明；被排除或类名配错时同样启动失败；
+- 因此不存在“只采集、不落库”的半接入状态。
+
+如果这类应用**完全不需要告警**，把 `alert.enabled` 留空（默认 `false`）即可，不校验、不影响启动。
 > 引入管理页面后，页面保存 + 刷新即可改表里的值，无需重启。
 
 ---
@@ -512,8 +532,10 @@ A：正常现象，实例数来自 `alert_config.console.instances` 这一行，
 **Q：页面提示“非当前应用，实例生效值不可见”**
 A：`alert_config.app_name` 与 `spring.application.name`（或 `alert.app-name`）不一致。用 `SELECT DISTINCT app_name FROM alert_config;` 对照实际拼写。
 
-**Q：启动报 `ClassNotFoundException: com.kingbase8.Driver`**
-A：业务方未提供 Kingbase 驱动，starter 不传递。加驱动依赖或检查驱动版本。
+**Q：启动报 `alert.enabled=true requires class 'com.kingbase8.Driver'` / `com.mysql.cj.jdbc.Driver`**
+A：启用告警后驱动类必须在类路径。starter 的驱动是 optional，需按告警库二选一声明：
+Kingbase 加 `cn.com.kingbase:kingbase8:9.0.0`，MySQL 加 `mysql:mysql-connector-java:8.0.22`。
+**应用会启动失败**，补上对应依赖或改对 `driver-class-name` 即可。
 
 **Q：接口抛异常但表里没有记录**
 A：依次检查 `alert.enabled`、`alert.biz.enabled`、数据源连通性、`alert_info` 的 INSERT 与序列权限，以及日志中的 `alert batch write failed`。

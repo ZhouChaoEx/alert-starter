@@ -34,7 +34,7 @@ import java.util.Map;
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnClass({AsyncConfigurer.class, AsyncConfigurerSupport.class,
         AsyncUncaughtExceptionHandler.class})
-@ConditionalOnProperty(prefix = "alert", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "alert", name = "enabled", havingValue = "true", matchIfMissing = false)
 @AutoConfigureAfter(AlertAutoConfiguration.class)
 public class AlertAsyncAutoConfiguration {
 
@@ -75,10 +75,11 @@ public class AlertAsyncAutoConfiguration {
             try {
                 Map<String, AsyncConfigurer> beans =
                         applicationContext.getBeansOfType(AsyncConfigurer.class);
-                for (AsyncConfigurer configurer : beans.values()) {
-                    if (configurer instanceof AlertAsyncConfigurer) {
-                        return;
-                    }
+                // 不能按 instanceof 判断：Sleuth 等组件会把 AsyncConfigurer 包装成 JDK 代理，
+                // 代理对象不再是 AlertAsyncConfigurer，会误报"业务已自定义"。
+                // 我们的 Bean 名固定为 alertAsyncConfigurer，按名字判断最可靠。
+                if (beans.containsKey("alertAsyncConfigurer")) {
+                    return;
                 }
                 log.warn("alert async exception collection is inactive: application already defines "
                         + "AsyncConfigurer ({}), wire AsyncExceptionHandler manually if needed",

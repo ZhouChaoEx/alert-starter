@@ -12,13 +12,21 @@
 
     <groupId>com.middleware.alert</groupId>
     <artifactId>alert-starter</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.2</version>
     <name>alert-starter</name>
     <description>微服务告警采集 starter：捕获异常并写入 alert_info 表</description>
 
     <properties>
         <java.version>1.8</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- 依赖版本集中管理；Spring Boot 自身依赖的版本由 parent BOM 决定，不在此重复 -->
+        <mybatis.version>3.5.6</mybatis.version>
+        <spring-cloud-openfeign.version>2.2.2.RELEASE</spring-cloud-openfeign.version>
+        <feign-core.version>10.10.1</feign-core.version>
+        <kingbase8.version>9.0.0</kingbase8.version>
+        <mysql-connector.version>8.0.22</mysql-connector.version>
+        <maven-surefire.version>3.1.2</maven-surefire.version>
     </properties>
 
     <dependencies>
@@ -52,7 +60,7 @@
         <dependency>
             <groupId>org.mybatis</groupId>
             <artifactId>mybatis</artifactId>
-            <version>3.5.6</version>
+            <version>${mybatis.version}</version>
             <optional>true</optional>
         </dependency>
 
@@ -60,17 +68,30 @@
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-openfeign-core</artifactId>
-            <version>2.2.2.RELEASE</version>
+            <version>${spring-cloud-openfeign.version}</version>
             <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>io.github.openfeign</groupId>
             <artifactId>feign-core</artifactId>
-            <version>10.10.1</version>
+            <version>${feign-core.version}</version>
             <optional>true</optional>
         </dependency>
 
-        <!-- kingbase 驱动由使用方提供，不传递，避免版本冲突 -->
+        <!-- JDBC 驱动不传递：业务方按告警库二选一（Kingbase / MySQL）显式声明；
+             缺失时启动校验会失败并给出对应依赖坐标，避免静默不落库。 -->
+        <dependency>
+            <groupId>cn.com.kingbase</groupId>
+            <artifactId>kingbase8</artifactId>
+            <version>${kingbase8.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>${mysql-connector.version}</version>
+            <optional>true</optional>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -114,7 +135,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.1.2</version>
+                <version>${maven-surefire.version}</version>
             </plugin>
         </plugins>
     </build>

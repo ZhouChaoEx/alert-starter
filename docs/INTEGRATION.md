@@ -10,24 +10,24 @@
 <dependency>
     <groupId>com.middleware.alert</groupId>
     <artifactId>alert-starter</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.2</version>
 </dependency>
 
 <!-- 可选：需要内嵌管理页面时引入 -->
 <dependency>
     <groupId>com.middleware.alert</groupId>
     <artifactId>alert-console-starter</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.2</version>
 </dependency>
 ```
 
-starter 已传递 `spring-boot-starter-aop`。以下依赖由使用方提供（业务应用通常已具备）：
+starter 已传递 `spring-boot-starter-aop`。JDBC 驱动以 `optional` 声明、不传递，业务方按告警库二选一。以下依赖由使用方提供（业务应用通常已具备）：
 
 | 依赖 | 说明 |
 | --- | --- |
 | `spring-boot-starter-web` | 慢请求 filter 与 Controller 切面 |
 | `spring-jdbc` / `spring-boot-starter-jdbc` | 使用方经 MyBatis 传递即可 |
-| `kingbase8` 驱动 | 业务已有，starter 不传递，避免版本冲突 |
+| `kingbase8` / `mysql-connector-java` | 连接告警库，**二选一声明**（starter 以 `optional` 声明、不传递）：Kingbase 用 `cn.com.kingbase:kingbase8:9.0.0`，MySQL 用 `mysql:mysql-connector-java:8.0.22`。缺失或类名配错时启动失败（启用告警必须能加载驱动） |
 
 要求 `spring.aop.auto` 保持默认 `true`，否则 `@Aspect` 不生效（慢请求仍可用）。
 
@@ -39,8 +39,8 @@ starter 已传递 `spring-boot-starter-aop`。以下依赖由使用方提供（�
 
 | 脚本 | 作用 |
 | --- | --- |
-| [`db/alert_info.sql`](../db/alert_info.sql) | 告警表 |
-| [`db/alert_config.sql`](../db/alert_config.sql) | 集中配置表，含默认初始化配置 |
+| [`db/kingbase/alert_info.sql`](../db/kingbase/alert_info.sql) / [`db/mysql/alert_info.sql`](../db/mysql/alert_info.sql) | 告警表（按告警库选择） |
+| [`db/kingbase/alert_config.sql`](../db/kingbase/alert_config.sql) / [`db/mysql/alert_config.sql`](../db/mysql/alert_config.sql) | 集中配置表，含默认初始化配置 |
 
 ```sql
 GRANT INSERT ON alert_info TO <应用账号>;
@@ -69,9 +69,11 @@ alert.env=prod
 
 # 告警库独立数据源，不复用业务数据源
 alert.datasource.url=jdbc:kingbase8://10.117.32.106:54321/pv?currentSchema=alert
+# MySQL 示例：jdbc:mysql://host:3306/alert_db?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
 alert.datasource.username=alert_writer
 alert.datasource.password=ENC(....)
-alert.datasource.driver-class-name=com.kingbase8.Driver
+# 可留空，按 URL 推断：com.kingbase8.Driver / com.mysql.cj.jdbc.Driver
+alert.datasource.driver-class-name=
 alert.datasource.hikari.maximum-pool-size=2
 alert.datasource.hikari.minimum-idle=1
 alert.datasource.hikari.connection-timeout-ms=3000
@@ -254,7 +256,9 @@ LIMIT 10;
 | 应用优雅停机 | `@PreDestroy`/SmartLifecycle 停止时 flush 队列，最长等待 5 秒 |
 | 进程被 `kill -9` | 队列内未消费事件丢失（已确认不做文件兜底） |
 | 数据库无 `alert_info` 表 | 启动自检 WARN，写入持续失败并计数 |
-| 未配置 `alert.datasource.url` | 不创建写入器，采集侧仍工作但只入内存队列 |
+| 未配置 `alert.datasource.url`（`alert.enabled=true`） | 启动失败：`AlertDatasourceValidationAutoConfiguration` 直接报错，要求业务系统必须配置告警库 |
+| 告警库驱动缺失（被排除或 `driver-class-name` 配错） | 启动失败：校验阶段报缺类，或 Hikari 创建连接池时报 `Failed to load driver class` |
+| 宿主已有业务数据源 | 告警连接池不注册为 `DataSource` / `JdbcTemplate` 类型的 bean（封装在 `AlertJdbcAccess` 里），宿主的 `transactionManager`、`jdbcTemplate` 自动装配不受影响 |
 | `alert.config.enabled=false` | 不加载 `alert_config`，使用 Apollo/代码默认值 |
 | `alert_config` 表不存在或不可读 | 启动 WARN，降级 Apollo/默认值，告警写入不受影响 |
 
@@ -262,8 +266,10 @@ LIMIT 10;
 
 ## 7. 常见问题
 
-**Q：启动报 `ClassNotFoundException: com.kingbase8.Driver`**
-A：业务方未提供 kingbase 驱动。starter 刻意不传递驱动，避免与业务版本冲突。
+**Q：启动报 `alert.enabled=true requires class 'com.kingbase8.Driver'` / `com.mysql.cj.jdbc.Driver` 或 `Failed to load driver class`**
+A：启用告警后驱动类必须在类路径。starter 的驱动是 `optional`，业务方需按告警库二选一声明：
+Kingbase 加 `cn.com.kingbase:kingbase8:9.0.0`，MySQL 加 `mysql:mysql-connector-java:8.0.22`。
+出现该错误通常是没声明驱动、或 `driver-class-name` 配成了不存在的类；**应用会启动失败**，补上对应依赖即可。
 
 **Q：接口抛异常但表里没有记录**
 A：依次检查 `alert.enabled`、`alert.biz.enabled`、数据源连通性、`alert_info` 表与 INSERT 权限，
@@ -297,7 +303,7 @@ mvn test -Dtest=AlertEndToEndTest
 
 覆盖范围：自动装配、Controller AOP、慢请求 Filter、异步批量写入、字段映射、去重。
 
-**不覆盖**：Kingbase 驱动与方言、Apollo 配置下发、Sleuth 真实 traceId。这三项需在内网真实环境验证。
+**不覆盖**：真实 Kingbase / MySQL、Apollo 配置下发、Sleuth 真实 traceId。这三项需在内网真实环境验证。
 
 ### 8.2 内网真实环境自检清单
 
@@ -305,7 +311,7 @@ mvn test -Dtest=AlertEndToEndTest
 
 | # | 操作 | 预期 |
 | --- | --- | --- |
-| 1 | DBA 执行 `db/alert_info.sql`，授予 `INSERT` 与序列权限 | 表与 6 个索引存在 |
+| 1 | DBA 执行对应库的 `db/{kingbase,mysql}/alert_info.sql`，授予 INSERT（Kingbase 另需序列权限） | 表与 6 个索引存在 |
 | 2 | Apollo 配置 `alert.datasource.*` | 启动日志出现 `alert writer started` |
 | 3 | 启动 xk-report | 日志出现 `alert table self-check passed`（失败会 WARN 但不阻断） |
 | 4 | 调用一个抛 `AlertableException` 的接口 | 1~2 秒内表中有 `BIZ_EXCEPTION`，`alert_level` / `title` / `request_uri` / `create_time` 正确 |

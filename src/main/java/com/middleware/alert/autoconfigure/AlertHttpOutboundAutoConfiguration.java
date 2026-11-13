@@ -30,7 +30,7 @@ import org.springframework.web.client.RestTemplate;
  * （{@code new RestTemplate()}、Hutool {@code HttpUtil}、OkHttp 等）。</p>
  */
 @Configuration(proxyBeanMethods = false)
-@ConditionalOnProperty(prefix = "alert", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "alert", name = "enabled", havingValue = "true", matchIfMissing = false)
 @AutoConfigureAfter(AlertAutoConfiguration.class)
 public class AlertHttpOutboundAutoConfiguration {
 

@@ -1,10 +1,10 @@
 # alert-starter
 
-微服务告警采集 starter：捕获异常并写入 kingbase `alert_info` 表，由 Zabbix 侧读取后发出通知。
+微服务告警采集 starter：捕获异常并写入 Kingbase / MySQL 的 `alert_info` 表，由 Zabbix 侧读取后发出通知。
 支持从与 `alert_info` 同库的 `alert_config` 表加载运行时可调参数。
 
 - 运行基线：Java 8 / Spring Boot 2.3.7.RELEASE
-- 坐标：`com.middleware.alert:alert-starter:1.0.0`
+- 坐标：`com.middleware.alert:alert-starter:1.0.2`
 - 原则：采集与写库不影响业务；数据源独立；写失败只丢弃并计数，不落文件
 
 ## 当前状态：M1 + P1 + P2 已完成
@@ -25,7 +25,7 @@
 - 指纹去重（首报立即入库 + 窗口到期汇总）+ 按类型限流
 - 集中配置表 `alert_config`：启动加载、本地不可变快照、手动刷新，库不可用时降级到 Apollo/默认值
 - DDL 由 DBA 手工执行，starter 只做只读自检
-- alert-starter 41 个单元测试 + 5 个端到端测试；配套 alert-console-starter 10 个测试（7 个集成 + 3 个单元）
+- alert-starter 133 个测试（含 PostgreSQL / MySQL 双模式端到端）；配套 alert-console-starter 23 个测试（14 个集成 + 9 个单元）
 
 P2 已完成：`alert-console-starter`（内嵌管理页面 + 配置 CRUD + 多实例刷新）。
 
@@ -40,22 +40,27 @@ P2 已完成：`alert-console-starter`（内嵌管理页面 + 配置 CRUD + 多�
 <dependency>
     <groupId>com.middleware.alert</groupId>
     <artifactId>alert-starter</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.2</version>
 </dependency>
 
 <!-- 可选：内嵌管理页面 -->
 <dependency>
     <groupId>com.middleware.alert</groupId>
     <artifactId>alert-console-starter</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.2</version>
 </dependency>
 ```
 
 ```properties
 alert.enabled=true
+
+# 告警库二选一：Kingbase 或 MySQL；驱动类名留空时按 URL 推断
 alert.datasource.url=jdbc:kingbase8://host:54321/pv?currentSchema=alert
+# alert.datasource.url=jdbc:mysql://host:3306/alert_db?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
 alert.datasource.username=alert_writer
 alert.datasource.password=ENC(....)
+# 可选；留空按 URL 推断：com.kingbase8.Driver / com.mysql.cj.jdbc.Driver
+# alert.datasource.driver-class-name=
 
 # 可选：启用 alert_config 表配置，默认 true
 alert.config.enabled=true
@@ -74,8 +79,10 @@ alert.console.enabled=true
 | [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | 需求说明书（10 类告警、配置项、验收标准、里程碑） |
 | [docs/ALERT_CONSOLE_DESIGN.md](docs/ALERT_CONSOLE_DESIGN.md) | 集中配置与 Console 设计（P1 + P2 已实现） |
 | [docs/INTEGRATION.md](docs/INTEGRATION.md) | 接入指南（依赖、配置、验证、常见问题） |
-| [db/alert_info.sql](db/alert_info.sql) | 告警表脚本（KingbaseES / PG 语法） |
-| [db/alert_config.sql](db/alert_config.sql) | 集中配置表脚本（与 alert_info 同库；末尾含存量应用补插段） |
+| [db/kingbase/alert_info.sql](db/kingbase/alert_info.sql) | 告警表脚本（KingbaseES / PG 语法） |
+| [db/kingbase/alert_config.sql](db/kingbase/alert_config.sql) | 配置表脚本（Kingbase，与 alert_info 同库） |
+| [db/mysql/alert_info.sql](db/mysql/alert_info.sql) | 告警表脚本（MySQL 8.0 / 5.7） |
+| [db/mysql/alert_config.sql](db/mysql/alert_config.sql) | 配置表脚本（MySQL，与 alert_info 同库） |
 | [../alert-console-starter/README.md](../alert-console-starter/README.md) | 管理页面接入说明 |
 
 ## 本地端点
@@ -112,9 +119,9 @@ mvn test -Dtest=AlertEndToEndTest     # 只跑端到端接入验证
 cd ../alert-console-starter && mvn test   # 管理页面 10 个测试（配置/查询/大屏/刷新）
 ```
 
-端到端测试用 H2 的 PostgreSQL 兼容模式模拟 xk-report 的接入方式（含吞异常的
+端到端测试用 H2 的 PostgreSQL / MySQL 兼容模式模拟实际接入方式（含吞异常的
 `@ControllerAdvice`），覆盖自动装配、AOP、慢请求 Filter、批量落库，以及
-`alert_config` 刷新后阈值动态生效。Kingbase 方言、Apollo、Sleuth 需在内网按
+`alert_config` 刷新后阈值动态生效。真实 Kingbase / MySQL、Apollo、Sleuth 需在内网按
 [接入指南的验证清单](docs/INTEGRATION.md#82-内网真实环境自检清单) 验证。
 
 ## 构建

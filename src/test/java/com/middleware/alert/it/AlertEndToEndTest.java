@@ -3,7 +3,9 @@ package com.middleware.alert.it;
 import com.middleware.alert.config.AlertConfigLoader;
 import com.middleware.alert.config.AlertConfigProvider;
 import com.middleware.alert.config.AlertConfigRefreshResult;
+import com.middleware.alert.config.AlertJdbcAccess;
 import com.middleware.alert.core.DedupRegistry;
+import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,9 +14,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
 
+import javax.sql.DataSource;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
                 "spring.application.name=alert-it",
+                "alert.enabled=true",
                 "spring.autoconfigure.exclude="
                         + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
                         + "org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration,"
@@ -52,6 +59,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         }
 )
 @Sql(scripts = "/schema-h2.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
+@Import(AlertEndToEndTest.TestDataSourceConfig.class)
 class AlertEndToEndTest {
 
     @Autowired
@@ -59,7 +67,11 @@ class AlertEndToEndTest {
 
     @Autowired
     @Qualifier("alertJdbcTemplate")
-    private JdbcTemplate jdbcTemplate;
+    private AlertJdbcAccess alertJdbcAccess;
+
+    private JdbcTemplate jdbcTemplate() {
+        return alertJdbcAccess.jdbcTemplate();
+    }
 
     @Autowired
     private DedupRegistry dedupRegistry;
@@ -133,7 +145,7 @@ class AlertEndToEndTest {
         // 给首次事件足够的批量写入时间
         Thread.sleep(1500L);
 
-        Integer count = jdbcTemplate.queryForObject(
+        Integer count = jdbcTemplate().queryForObject(
                 "SELECT COUNT(*) FROM alert_info WHERE alert_type = 'BIZ_EXCEPTION'", Integer.class);
         assertThat(count).isEqualTo(1);
     }
@@ -141,8 +153,8 @@ class AlertEndToEndTest {
     @Test
     void runtimeConfigFromTableTakesEffectAfterRefresh() throws Exception {
         try {
-            jdbcTemplate.update("DELETE FROM alert_config WHERE app_name = ?", "alert-it");
-            jdbcTemplate.update(
+            jdbcTemplate().update("DELETE FROM alert_config WHERE app_name = ?", "alert-it");
+            jdbcTemplate().update(
                     "INSERT INTO alert_config (app_name, config_key, config_value, value_type, version) "
                             + "VALUES (?, ?, ?, ?, ?)",
                     "alert-it", "slow-request.threshold-ms", "1", "LONG", 10L);
@@ -160,7 +172,7 @@ class AlertEndToEndTest {
             assertThat(rows).hasSize(1);
             assertThat(((Number) rows.get(0).get("cost_ms")).longValue()).isGreaterThanOrEqualTo(150L);
         } finally {
-            jdbcTemplate.update("DELETE FROM alert_config WHERE app_name = ?", "alert-it");
+            jdbcTemplate().update("DELETE FROM alert_config WHERE app_name = ?", "alert-it");
             configLoader.refresh();
         }
     }
@@ -169,7 +181,7 @@ class AlertEndToEndTest {
         long deadline = System.currentTimeMillis() + 5000L;
         List<Map<String, Object>> rows = Collections.emptyList();
         while (System.currentTimeMillis() < deadline) {
-            rows = jdbcTemplate.queryForList(
+            rows = jdbcTemplate().queryForList(
                     "SELECT * FROM alert_info WHERE alert_type = ? ORDER BY id", alertType);
             if (rows.size() >= expected) {
                 return rows;
@@ -177,5 +189,22 @@ class AlertEndToEndTest {
             Thread.sleep(50L);
         }
         return rows;
+    }
+
+    /**
+     * {@code @Sql} 需要容器里有一个 DataSource；告警数据源不再暴露成该类型，这里补一个业务库，
+     * 同时覆盖“业务数据源 + 告警数据源共存”的真实接入场景。
+     */
+    @TestConfiguration
+    static class TestDataSourceConfig {
+
+        @Bean(name = "dataSource")
+        public DataSource dataSource() {
+            HikariDataSource dataSource = new HikariDataSource();
+            dataSource.setJdbcUrl("jdbc:h2:mem:alertit;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1");
+            dataSource.setUsername("sa");
+            dataSource.setPassword("");
+            return dataSource;
+        }
     }
 }

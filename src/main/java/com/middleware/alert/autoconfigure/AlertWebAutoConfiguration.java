@@ -26,7 +26,7 @@ import org.springframework.web.servlet.DispatcherServlet;
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnClass({DispatcherServlet.class, RestController.class, Aspect.class})
-@ConditionalOnProperty(prefix = "alert", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "alert", name = "enabled", havingValue = "true", matchIfMissing = false)
 @AutoConfigureAfter(AlertAutoConfiguration.class)
 public class AlertWebAutoConfiguration {
 
@@ -43,7 +43,7 @@ public class AlertWebAutoConfiguration {
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "alert.biz", name = "enabled",
             havingValue = "true", matchIfMissing = true)
-    public BizExceptionAspect bizExceptionAspect(AlertExceptionHandler alertExceptionHandler) {
+    public BizExceptionAspect alertBizExceptionAspect(AlertExceptionHandler alertExceptionHandler) {
         return new BizExceptionAspect(alertExceptionHandler);
     }
 

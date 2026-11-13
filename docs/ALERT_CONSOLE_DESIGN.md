@@ -219,7 +219,7 @@ CREATE TABLE alert_config (
 
 ### 5.2 启动流程
 
-1. 若未配置 `alert.datasource.url` 或 `alert.config.enabled=false`，跳过，全部使用 `AlertProperties`；
+1. 若 `alert.config.enabled=false`，跳过，全部使用 `AlertProperties`（`alert.datasource.url` 在启用告警时必填，缺失启动失败）；
 2. 若配置了，尝试加载 `WHERE app_name = ?` 全量配置；
 3. 加载成功：构建快照，打印最终生效配置（key=value，来源=表/Apollo/默认值）；
 4. 加载失败（库不可用、表不存在）：打 WARN，使用 `AlertProperties`，应用继续启动；
@@ -401,7 +401,7 @@ alert-console-starter/
 | `DedupRegistry` | 窗口、条目上限改读快照 |
 | `RateLimiter` | 改为每次 `allow()` 读快照，支持热更新 |
 | `AlertAutoConfiguration` | 装配新组件；共享库不可用时降级 |
-| `AlertPersistenceAutoConfiguration` | 复用 `alertDataSource` / `alertJdbcTemplate`，不新增数据源 |
+| `AlertPersistenceAutoConfiguration` | 复用 `alertJdbcTemplate`（`AlertJdbcAccess` 内部持有连接池），不新增数据源；不向宿主暴露 `DataSource` / `JdbcTemplate` 类型 bean |
 
 ### 7.2 新增模块
 
@@ -412,10 +412,14 @@ alert-console-starter/
 ```properties
 # Apollo：启动引导配置（8 个微服务指向同一个项目组共享库）
 alert.enabled=true
+# Kingbase
 alert.datasource.url=jdbc:kingbase8://.../pv?currentSchema=alert
+# MySQL 示例
+# alert.datasource.url=jdbc:mysql://host:3306/alert_db?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
 alert.datasource.username=...
 alert.datasource.password=ENC(....)
-alert.datasource.driver-class-name=com.kingbase8.Driver
+# 可留空，按 URL 推断：com.kingbase8.Driver / com.mysql.cj.jdbc.Driver
+alert.datasource.driver-class-name=
 alert.datasource.self-check=true
 
 # 配置表加载（复用同一个数据源）
@@ -432,7 +436,7 @@ alert.console.enabled=true
 
 | 场景 | 行为 |
 | --- | --- |
-| 未配置 `alert.datasource.url` 或 `alert.config.enabled=false` | 不加载表，完全使用 `AlertProperties`，告警也不写入 |
+| `alert.config.enabled=false` | 不加载表，完全使用 `AlertProperties`；启用告警时 `alert.datasource.url` 必填，缺失启动失败 |
 | 未引入 `alert-console-starter` | 无页面；`alert-starter` 启动时加载表，改配置后重启生效 |
 | 共享库不可用（启动） | WARN，降级到 `AlertProperties`，应用正常启动 |
 | 共享库不可用（运行中刷新） | 保留旧快照，返回失败原因 |
@@ -545,7 +549,7 @@ ORDER BY count(*) DESC;
 
 - `alert.datasource.hikari.maximum-pool-size` 默认 2。写入是单线程批量 INSERT，配置刷新只是偶发查询，2 个连接足够。
 - `minimum-idle` 保持 1，避免空闲连接长期占用。
-- 给告警连接打标：JDBC URL 追加 `ApplicationName=alert-starter`（Kingbase 驱动支持时），这样在 `pg_stat_activity.application_name` 里能直接区分告警连接和业务连接。
+- 给告警连接打标：Kingbase 可在 JDBC URL 追加 `ApplicationName=alert-starter`（`pg_stat_activity.application_name` 可见）；MySQL 可用 `connectionAttributes=program_name:alert-starter`（需驱动支持）。
 - 监控连接使用率，超过 70% 告警。
 
 **第四步：测试环境验证**

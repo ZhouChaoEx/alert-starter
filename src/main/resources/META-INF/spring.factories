@@ -1,5 +1,6 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
 com.middleware.alert.autoconfigure.AlertAutoConfiguration,\
+com.middleware.alert.autoconfigure.AlertDatasourceValidationAutoConfiguration,\
 com.middleware.alert.autoconfigure.AlertPersistenceAutoConfiguration,\
 com.middleware.alert.autoconfigure.AlertWebAutoConfiguration,\
 com.middleware.alert.autoconfigure.AlertSlowSqlAutoConfiguration,\

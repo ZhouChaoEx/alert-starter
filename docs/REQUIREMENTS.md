@@ -45,7 +45,7 @@ Zabbix 的读取方式、去重展示、通知渠道不在本 starter 范围内�
 | 项 | 现状 | 对设计的影响 |
 | --- | --- | --- |
 | 技术栈 | Boot 2.3.7、Java 8、Cloud Hoxton.SR9、MyBatis-Plus 3.4.3.4 | starter 编译目标 1.8，自动装配用 `META-INF/spring.factories` |
-| 数据库 | kingbase8 9.0.0，`DbType.KINGBASE_ES`，PG 风格 SQL | DDL 使用 PG 语法（`bigserial`、`text`、`COMMENT ON`） |
+| 数据库 | KingbaseES（8.6 / 9.0）或 MySQL（5.7 / 8.0）；业务 SQL 全 ANSI 兼容 | DDL 分两套：`db/kingbase`（PG 语法）与 `db/mysql`（`AUTO_INCREMENT` / `TEXT` / `DATETIME(3)`） |
 | 配置中心 | Apollo，`apollo.bootstrap.enabled=true` | 所有 `alert.*` 配置可由 Apollo 下发，代码内提供默认值 |
 | 密码 | 形如 `ENC(...)`，由 `xk-basic` 的 `ConfigEnvironmentPostProcessor` 全局解密 | `alert.datasource.password` 可直接使用 `ENC()`，starter 不重复实现解密 |
 | 全局异常处理 | 各服务普遍存在 `@ExceptionHandler(Exception.class)`，异常被转成 HTTP 200 + 业务错误码 | **不能依赖 HTTP 状态码判断业务异常**，必须在 Controller 层 AOP 捕获 `Throwable` |
@@ -58,7 +58,7 @@ Zabbix 的读取方式、去重展示、通知渠道不在本 starter 范围内�
 
 1. 移除 `spring-boot-maven-plugin`：starter 不能是可执行 jar，否则被依赖时类位于 `BOOT-INF/classes` 下会 `ClassNotFoundException`。
 2. 删除 `src/main/resources/application.properties`：其中的 `spring.application.name=alert-stater` 会污染引入方（注册中心、链路追踪）。
-3. 依赖策略：`spring-boot-starter-aop` 传递；`spring-boot-starter-web`、`spring-boot-starter-jdbc` 声明为 `optional`；`kingbase8` 驱动不声明，由使用方提供，避免版本冲突。自动装配通过 `@ConditionalOnClass` 降级。
+3. 依赖策略：`spring-boot-starter-aop` 传递；`spring-boot-starter-web`、`spring-boot-starter-jdbc` 声明为 `optional`；`kingbase8` 与 `mysql-connector-java` 均以 `optional` 声明、不传递，业务方按告警库二选一声明，`driver-class-name` 留空时按 URL 推断。自动装配通过 `@ConditionalOnClass` 降级；启用告警（`alert.enabled=true`）时由 `AlertDatasourceValidationAutoConfiguration` 强制校验 `alert.datasource.url`、JdbcTemplate/Hikari 与驱动类，缺失直接启动失败，不再静默降级。
 4. 包名统一为 `com.middleware.alert`。
 
 ---
@@ -322,7 +322,7 @@ M1 可用的排查信息：`alert queue is full`、`alert batch write failed`、
 
 ### 6.1 表
 
-表名固定 `alert_info`，DDL 见 [`db/alert_info.sql`](../db/alert_info.sql)。
+表名固定 `alert_info`，DDL 见 [`db/kingbase/alert_info.sql`](../db/kingbase/alert_info.sql) 与 [`db/mysql/alert_info.sql`](../db/mysql/alert_info.sql)。
 
 - 由 DBA 手工执行，starter **不自动建表**。
 - 应用账号只需 `INSERT` 权限；启动时做一次只读自检（`SELECT 1 FROM alert_info WHERE 1=0`），失败打 WARN 并降级，不阻断启动。
@@ -362,7 +362,8 @@ alert.stack-trace.max-length=8192
 alert.datasource.url=
 alert.datasource.username=
 alert.datasource.password=           # 支持公司 ENC()
-alert.datasource.driver-class-name=com.kingbase8.Driver
+# 可留空，按 URL 推断：com.kingbase8.Driver / com.mysql.cj.jdbc.Driver
+alert.datasource.driver-class-name=
 alert.datasource.hikari.maximum-pool-size=2
 alert.datasource.hikari.minimum-idle=1
 alert.datasource.hikari.connection-timeout-ms=3000
@@ -480,7 +481,7 @@ AlertReporter.enable();
 | 可观测 | M1 仅输出关键事件日志（队列满、写失败、自检失败、停机统计）；周期汇总指标在 M3 实现，不提供 actuator 端点 |
 | 安全 | 不采集请求参数、请求体、响应体、SQL 实参；堆栈与 SQL 按长度截断；`extra` 由业务方保证脱敏 |
 | 兼容 | 支持 Spring Boot 2.3.x / Java 8；不引入与业务冲突的传递依赖 |
-| 可测试 | 采集点单测不依赖真实 kingbase，使用内存 `AlertSink` |
+| 可测试 | 采集点单测不依赖真实数据库，使用内存 `AlertSink` |
 
 ---
 
@@ -495,7 +496,7 @@ AlertReporter.enable();
 | 5 | 慢 SQL | 超过阈值产生一条，`sql_text` 中参数为 `?`，无实参 |
 | 6 | 资源类 | 人为压满线程池/连接池后 3 个采样周期内产生告警 |
 | 7 | 去重 | 5 分钟内同一异常重复 100 次：首次立即入库 1 条（`repeat_count=1`），窗口到期补 1 条汇总（`repeat_count=100`），窗口内不产生第 3 条 |
-| 8 | 故障隔离 | 关闭 kingbase 后业务接口 P99 无明显变化；队列满或写入失败均只丢弃并计数，不落文件、不阻塞业务 |
+| 8 | 故障隔离 | 关闭告警库后业务接口 P99 无明显变化；队列满或写入失败均只丢弃并计数，不落文件、不阻塞业务 |
 | 9 | 启动兼容 | 无 Web 环境、无 MyBatis、无 Feign 的服务引入后均能正常启动 |
 | 10 | 关闭开关 | `alert.enabled=false` 后不产生任何采集与线程 |
 
@@ -505,7 +506,7 @@ AlertReporter.enable();
 
 | 里程碑 | 内容 | 交付物 |
 | --- | --- | --- |
-| M0（本次） | 需求评审 | 本文档 + `db/alert_info.sql` |
+| M0（本次） | 需求评审 | 本文档 + `db/kingbase/alert_info.sql` / `db/mysql/alert_info.sql` |
 | M1（已完成） | 工程改造、事件模型、独立数据源、异步批量写入、DDL、`BIZ_EXCEPTION` / `STACK_OVERFLOW` / `NULL_POINTER` / `SLOW_REQUEST` | starter 骨架 + 31 个单测 + 4 个端到端测试 + `docs/INTEGRATION.md` 接入示例 |
 | P1（已完成） | 集中配置表 `alert_config`、运行时快照、读取点改造、手动刷新 | 46 个测试通过；设计见 `docs/ALERT_CONSOLE_DESIGN.md` |
 | M2（部分完成） | `ASYNC_EXCEPTION` / `SLOW_SQL` 已实现（默认关闭）；`THREAD_POOL_SATURATED` / `CONNECTION_POOL_EXHAUSTED` 待做 | 采集实现 + 单测；本次新增 30 个测试，合计 77 个通过 |
