@@ -4,7 +4,7 @@
 支持从与 `alert_info` 同库的 `alert_config` 表加载运行时可调参数。
 
 - 运行基线：Java 8 / Spring Boot 2.3.7.RELEASE
-- 坐标：`com.middleware.alert:alert-starter:1.0.2`
+- 坐标：`com.middleware.alert:alert-starter:1.0.3`
 - 原则：采集与写库不影响业务；数据源独立；写失败只丢弃并计数，不落文件
 
 ## 当前状态：M1 + P1 + P2 已完成
@@ -40,14 +40,14 @@ P2 已完成：`alert-console-starter`（内嵌管理页面 + 配置 CRUD + 多�
 <dependency>
     <groupId>com.middleware.alert</groupId>
     <artifactId>alert-starter</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
 </dependency>
 
 <!-- 可选：内嵌管理页面 -->
 <dependency>
     <groupId>com.middleware.alert</groupId>
     <artifactId>alert-console-starter</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 

@@ -5,7 +5,7 @@
 | 文档版本 | v1.0（M1 已实现） |
 | 编写日期 | 2026-11-11 |
 | 状态 | M1 + P1 已完成；M2 已完成 `ASYNC_EXCEPTION` / `SLOW_SQL`，其余两类待做；M3 已完成 `OOM_WARNING` / `HTTP_OUTBOUND`；115 个测试通过 |
-| 目标制品 | `com.middleware.alert:alert-starter:1.0.0` |
+| 目标制品 | `com.middleware.alert:alert-starter:1.0.3` |
 | 运行基线 | Java 8 / Spring Boot 2.3.7.RELEASE / Spring Cloud Hoxton.SR9 |
 
 ---
@@ -367,6 +367,8 @@ alert.datasource.driver-class-name=
 alert.datasource.hikari.maximum-pool-size=2
 alert.datasource.hikari.minimum-idle=1
 alert.datasource.hikari.connection-timeout-ms=3000
+# 连接最长存活 10 分钟（需小于数据库/网络空闲超时，按实际环境调整）
+alert.datasource.hikari.max-lifetime=600000
 alert.datasource.self-check=true
 
 # ── 管道 ─────────────────────────────────────────────

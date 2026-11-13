@@ -12,7 +12,7 @@
 
     <groupId>com.middleware.alert</groupId>
     <artifactId>alert-starter</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
     <name>alert-starter</name>
     <description>微服务告警采集 starter：捕获异常并写入 alert_info 表</description>
 

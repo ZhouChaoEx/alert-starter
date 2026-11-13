@@ -10,14 +10,14 @@
 <dependency>
     <groupId>com.middleware.alert</groupId>
     <artifactId>alert-starter</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
 </dependency>
 
 <!-- 可选：需要内嵌管理页面时引入 -->
 <dependency>
     <groupId>com.middleware.alert</groupId>
     <artifactId>alert-console-starter</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -77,6 +77,8 @@ alert.datasource.driver-class-name=
 alert.datasource.hikari.maximum-pool-size=2
 alert.datasource.hikari.minimum-idle=1
 alert.datasource.hikari.connection-timeout-ms=3000
+# 连接最长存活 10 分钟（需小于数据库/网络空闲超时，按实际环境调整）
+alert.datasource.hikari.max-lifetime=600000
 alert.datasource.self-check=true
 
 # 集中配置表（与 alert_info 同库），默认 true

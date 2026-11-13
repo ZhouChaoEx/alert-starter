@@ -49,6 +49,8 @@ public class AlertJdbcAccess implements DisposableBean {
         dataSource.setMaximumPoolSize(config.getHikari().getMaximumPoolSize());
         dataSource.setMinimumIdle(config.getHikari().getMinimumIdle());
         dataSource.setConnectionTimeout(config.getHikari().getConnectionTimeoutMs());
+        // 连接最长存活 10 分钟，需小于数据库/网络空闲超时，避免失效连接被下一次请求踩到
+        dataSource.setMaxLifetime(config.getHikari().getMaxLifetimeMs());
         // 懒初始化：数据源不可用时不在启动阶段抛异常
         dataSource.setInitializationFailTimeout(-1L);
         dataSource.setAutoCommit(true);

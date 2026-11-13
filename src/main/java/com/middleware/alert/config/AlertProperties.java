@@ -199,6 +199,8 @@ public class AlertProperties {
         private int maximumPoolSize = 2;
         private int minimumIdle = 1;
         private long connectionTimeoutMs = 3000;
+        /** 连接最长存活时间（毫秒），需 >= 30000；默认 18 分钟，建议小于数据库/网络空闲超时 */
+        private long maxLifetimeMs = 1080000L;
 
         public int getMaximumPoolSize() {
             return maximumPoolSize;
@@ -222,6 +224,14 @@ public class AlertProperties {
 
         public void setConnectionTimeoutMs(long connectionTimeoutMs) {
             this.connectionTimeoutMs = connectionTimeoutMs;
+        }
+
+        public long getMaxLifetimeMs() {
+            return maxLifetimeMs;
+        }
+
+        public void setMaxLifetimeMs(long maxLifetimeMs) {
+            this.maxLifetimeMs = maxLifetimeMs;
         }
     }
 
